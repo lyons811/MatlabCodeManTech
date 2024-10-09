@@ -1,4 +1,4 @@
-% Improved MATLAB Code for Signal Processing and Feature Extraction with AI Integration
+% Improved MATLAB Code for Fast Signal Analysis and Feature Extraction with AI Integration
 
 %% Initialization and Setup
 try
@@ -33,7 +33,6 @@ end
 try
     fprintf('Transferring data to GPU...\n');
     X_train_gpu = gpuArray(single(X_train)); % Convert to single precision
-    % Y_train_gpu will be kept on CPU for neural network training
     clear X_train; % Free CPU memory
     fprintf('Data transferred to GPU.\n');
 catch ME
@@ -96,8 +95,7 @@ function features = process_multiple_signals_gpu(signals, signal_length, num_fea
     % Spectral Rolloff (85%)
     cumsum_psd = cumsum(psd, 2);
     thresholds = 0.85 * sum(psd, 2);
-    rolloff_bins = sum(cumsum_psd < thresholds, 2);
-    spectral_rolloff = rolloff_bins / signal_length;
+    spectral_rolloff = sum(cumsum_psd < thresholds, 2) / signal_length;
     
     % Signal Energy
     signal_energy = sum(abs(complex_signals).^2, 2);
@@ -265,6 +263,7 @@ catch ME
     return;
 end
 
+%% Perform PCA for Dimensionality Reduction
 try
     fprintf('Performing PCA for dimensionality reduction...\n');
     
@@ -286,32 +285,6 @@ catch ME
     fprintf('PCA Error: %s\n', ME.message);
     reduced_features = [];
 end
-%% Anomaly Detection using Isolation Forest
-try
-    fprintf('Performing anomaly detection using Isolation Forest...\n');
-    
-    % Define contamination factor (proportion of anomalies expected)
-    contamination = 0.1; % Adjust as needed
-    
-    % Create the Isolation Forest model
-    iforest = isolationForest('ContaminationFraction', contamination, 'NumLearners', 100);
-    
-    % Fit the model and compute anomaly scores
-    [~, anomaly_scores] = iforest.fit(features_matrix);
-    
-    % Determine the anomaly threshold
-    anomaly_threshold = iforest.threshold;
-    
-    % Convert scores to anomaly flags (1 for anomaly, 0 for normal)
-    anomaly_flags = anomaly_scores > anomaly_threshold;
-    
-    fprintf('Anomaly detection completed. Found %d anomalies (%.2f%% of the data).\n', ...
-            sum(anomaly_flags), 100*sum(anomaly_flags)/numel(anomaly_flags));
-catch ME
-    fprintf('Anomaly Detection Error: %s\n', ME.message);
-    anomaly_flags = [];
-    anomaly_scores = [];
-end
 
 %% Train a Deep Neural Network for Signal Classification
 try
@@ -320,15 +293,19 @@ try
     [~, true_labels_numeric] = max(Y_train, [], 2); % [469200 x 1]
     true_labels = categorical(true_labels_numeric);
     
+    % Shuffle data
+    rng(1961); % For reproducibility
+    shuffle_indices = randperm(num_samples);
+    features_matrix = features_matrix(shuffle_indices, :);
+    true_labels = true_labels(shuffle_indices);
+    
     % Split data into training and validation sets
     validation_fraction = 0.2;
     num_val = floor(validation_fraction * num_samples);
-    rng(1961); % For reproducibility
-    idx = randperm(num_samples);
-    X_train_nn = features_matrix(idx(1:end-num_val), :);
-    Y_train_nn = true_labels(idx(1:end-num_val));
-    X_val_nn = features_matrix(idx(end-num_val+1:end), :);
-    Y_val_nn = true_labels(idx(end-num_val+1:end));
+    X_train_nn = features_matrix(1:end-num_val, :);
+    Y_train_nn = true_labels(1:end-num_val);
+    X_val_nn = features_matrix(end-num_val+1:end, :);
+    Y_val_nn = true_labels(end-num_val+1:end);
     
     % Define the network architecture
     layers = [
@@ -368,104 +345,114 @@ try
     fprintf('Creating multi-signal analysis visualizations...\n');
     figure('Name', 'Multi-Signal Analysis', 'NumberTitle', 'off');
     
-    % 3D Scatter Plot of PCA Components
-    subplot(2, 3, 1);
-    true_labels_numeric = double(true_labels);
+    % 3D Scatter Plot of PCA Components Colored by Class
     if size(reduced_features,2) >= 3
-        scatter3(reduced_features(:,1), reduced_features(:,2), reduced_features(:,3), 20, true_labels_numeric, 'filled');
-        xlabel('PC1'); ylabel('PC2'); zlabel('PC3');
-    elseif size(reduced_features,2) == 2
-        scatter(reduced_features(:,1), reduced_features(:,2), 20, true_labels_numeric, 'filled');
-        xlabel('PC1'); ylabel('PC2');
-    else
-        scatter(reduced_features(:,1), zeros(num_samples,1), 20, true_labels_numeric, 'filled');
-        xlabel('PC1'); ylabel('PC2 (Not Available)');
-    end
-    title('PCA of Signal Features');
-    grid on;
-    colorbar;
-    colormap jet;
-    
-    % Anomaly Scores Distribution
-    subplot(2, 3, 2);
-    if ~isempty(anomaly_scores)
-        histogram(anomaly_scores, 'BinMethod', 'auto');
-        title('Anomaly Scores Distribution');
-        xlabel('Anomaly Score');
-        ylabel('Frequency');
+        % Convert reduced_features to double if they are single
+        x = double(reduced_features(:,1));
+        y = double(reduced_features(:,2));
+        z = double(reduced_features(:,3));
+        
+        % Define a colormap with enough distinct colors
+        cmap = jet(23); % Assuming 23 classes
+        
+        % Create a scatter3 plot
+        scatter3(x, y, z, 10, true_labels_numeric, 'filled');
+        xlabel('PC1');
+        ylabel('PC2');
+        zlabel('PC3');
+        title('PCA of Signal Features Colored by Class');
         grid on;
+        colorbar;
+        colormap(cmap);
+        
+        % Optionally, set the color axis to cover all classes
+        caxis([1 23]);
+        
+    elseif size(reduced_features,2) == 2
+        % 2D Scatter Plot if only 2 PCA components are available
+        x = double(reduced_features(:,1));
+        y = double(reduced_features(:,2));
+        
+        gscatter(x, y, true_labels_numeric, jet(23), 'o', 5);
+        xlabel('PC1');
+        ylabel('PC2');
+        title('PCA of Signal Features Colored by Class');
+        grid on;
+        colorbar;
+        colormap(jet(23));
+        
     else
-        title('Anomaly Scores Distribution');
-        text(0.5, 0.5, 'Anomaly Scores Not Available', 'HorizontalAlignment', 'center');
+        % 1D Scatter Plot if only 1 PCA component is available
+        x = double(reduced_features(:,1));
+        
+        scatter(x, zeros(num_samples,1), 10, true_labels_numeric, 'filled');
+        xlabel('PC1');
+        ylabel('PC2 (Not Available)');
+        title('PCA of Signal Features Colored by Class');
+        grid on;
+        colorbar;
+        colormap(jet(23));
     end
     
     % Feature Correlation Heatmap
-    subplot(2, 3, 3);
+    subplot(2, 2, 2);
     correlation_matrix = corr(features_matrix);
     heatmap(correlation_matrix, 'Title', 'Feature Correlation', 'XDisplayLabels', feature_names, 'YDisplayLabels', feature_names);
     
-    % Spectral Entropy Histogram
-    subplot(2, 3, 4);
-    histogram(features_matrix(:,6), 'BinMethod', 'auto');
-    title('Histogram of Spectral Entropy');
-    xlabel('Spectral Entropy');
-    ylabel('Frequency');
-    grid on;
+    % Feature Distribution Histograms per Class (Example with a few features)
+    subplot(2, 2, 3);
+    feature_to_plot = 6; % Spectral Entropy
+    g = findgroups(true_labels_numeric);
+    boxplot(features_matrix(:,feature_to_plot), g);
+    title('Boxplot of Spectral Entropy per Class');
+    xlabel('Class');
+    ylabel('Spectral Entropy');
     
-    % Zero-Crossing Rate Histogram
-    subplot(2, 3, 5);
-    histogram(features_matrix(:,11), 'BinMethod', 'auto');
-    title('Histogram of Zero-Crossing Rate');
-    xlabel('Zero-Crossing Rate');
-    ylabel('Frequency');
-    grid on;
+    subplot(2, 2, 4);
+    feature_to_plot = 11; % Zero-Crossing Rate
+    boxplot(features_matrix(:,feature_to_plot), g);
+    title('Boxplot of Zero-Crossing Rate per Class');
+    xlabel('Class');
+    ylabel('Zero-Crossing Rate');
     
-    % Anomaly Highlight in PCA Plot
-    subplot(2, 3, 6);
-    if ~isempty(anomaly_flags) && ~isempty(reduced_features)
-        scatter3(reduced_features(:,1), reduced_features(:,2), reduced_features(:,3), 10, anomaly_flags, 'filled');
-        xlabel('PC1'); ylabel('PC2'); zlabel('PC3');
-        title('Anomalies Highlighted in PCA Space');
-        colormap(gca, [0 0 1; 1 0 0]); % Blue for normal, Red for anomalies
-        colorbar('Ticks', [0, 1], 'TickLabels', {'Normal', 'Anomaly'});
-    else
-        title('Anomalies Highlighted in PCA Space');
-        text(0.5, 0.5, 'Anomalies Not Detected', 'HorizontalAlignment', 'center');
-    end
-    
-   % Display Multi-Signal Analysis Results
+    % Display Multi-Signal Analysis Results
     fprintf('\nMulti-Signal Analysis:\n');
     fprintf('Number of samples analyzed: %d\n', num_samples);
     fprintf('Number of features extracted per signal: %d\n', num_features);
-    if ~isempty(anomaly_scores)
-        fprintf('Mean Anomaly Score: %.4f\n', mean(anomaly_scores));
-        fprintf('Number of detected anomalies: %d\n', sum(anomaly_flags));
-    end
     
-    if ~isempty(anomaly_scores)
-        % Identify Top 5 Anomalies
-        [sorted_scores, anomaly_indices_sorted] = sort(anomaly_scores, 'descend');
-        top_anomalies = anomaly_indices_sorted(1:min(5, length(anomaly_indices_sorted)));
-        fprintf('Top 5 anomalous signal indices: %s\n', mat2str(top_anomalies));
-        
-        % Display Top 5 Anomalous Signals
-        for idx = 1:length(top_anomalies)
-            fprintf('Anomaly %d: Signal Index %d with Score %.4f\n', idx, top_anomalies(idx), sorted_scores(idx));
-        end
+    % Evaluate the trained network on validation data
+    Y_pred = classify(net, X_val_nn);
+    accuracy = sum(Y_pred == Y_val_nn) / numel(Y_val_nn) * 100;
+    fprintf('Validation Accuracy: %.2f%%\n', accuracy);
+    
+    % Confusion Matrix
+    figure('Name', 'Confusion Matrix', 'NumberTitle', 'off');
+    confusionchart(Y_val_nn, Y_pred);
+    title('Confusion Matrix for Signal Classification');
+    
+    fprintf('Multi-Signal Analysis Visualization completed.\n');
+    
+    % Identify Top 5 Misclassified Signals (if needed)
+    [~, misclassified_indices] = find(Y_pred ~= Y_val_nn);
+    top_misclassified = misclassified_indices(1:min(5, length(misclassified_indices)));
+    fprintf('Top 5 Misclassified signal indices in validation set: %s\n', mat2str(top_misclassified));
+    
+    % Optionally, display some misclassified signals
+    for idx = 1:length(top_misclassified)
+        signal_idx = num_samples - num_val + top_misclassified(idx); % Adjust index for validation set
+        fprintf('Misclassified Signal %d: Predicted Class %s, True Class %s\n', ...
+                signal_idx, string(Y_pred(top_misclassified(idx))), string(Y_val_nn(top_misclassified(idx))));
     end
 catch ME
     fprintf('Multi-Signal Analysis Visualization Error: %s\n', ME.message);
 end
 
+
 %% Save Processed Data and Results
 try
     fprintf('Saving processed data and results...\n');
     % Prepare variables to save
-    save_vars = {'features_matrix', 'reduced_features', 'anomaly_scores', 'anomaly_flags'};
-    % Check if anomaly_scores and anomaly_flags exist
-    if ~exist('anomaly_scores', 'var') || isempty(anomaly_scores)
-        save_vars = setdiff(save_vars, {'anomaly_scores', 'anomaly_flags'});
-    end
+    save_vars = {'features_matrix', 'reduced_features'};
     save('processedFeatures.mat', save_vars{:});
     fprintf('All data and results saved successfully.\n');
 catch ME
