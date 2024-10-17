@@ -246,8 +246,38 @@ title('t-SNE of Subset (Colored by Signal Power)');
 colorbar;
 colormap(jet);
 
+% 14. Energy Detector Plot
+subplot(4, 4, 14);
+energy_threshold = 0.7 * max(abs(complexSignal_gpu).^2); % 70% of max energy as threshold
+signal_energy = abs(complexSignal_gpu).^2;
+detected_signals = signal_energy > energy_threshold;
+t = (0:length(complexSignal_gpu)-1) / 1024; % Assuming 1024 Hz sampling rate
+plot(t, signal_energy);
+hold on;
+plot(t, energy_threshold * ones(size(t)), 'r--');
+plot(t(detected_signals), signal_energy(detected_signals), 'ro');
+hold off;
+title('Energy Detector');
+xlabel('Time (s)');
+ylabel('Signal Energy');
+legend('Signal Energy', 'Threshold', 'Detected Signals');
+
+% 16. 3D Spectrogram Plot (replacing Waterfall Plot)
+subplot(4, 4, 15);
+[S, F, T] = spectrogram(complexSignal_gpu, hamming(256), 128, 512, 1024);
+S_magnitude = 10*log10(abs(S) + eps); % Convert to dB scale
+surf(T, F, S_magnitude, 'EdgeColor', 'none');
+axis tight;
+view(-15, 60); % Adjust view angle
+xlabel('Time (s)');
+ylabel('Frequency (Hz)');
+zlabel('Magnitude (dB)');
+title('3D Spectrogram');
+colorbar;
+
 % Display spectral analysis results
 fprintf('Spectral Entropy: %.4f\n', se);
 fprintf('Spectral Flatness: %.4f\n', sf);
 fprintf('Spectral Kurtosis: %.4f\n', sk);
 fprintf('Spectral Skewness: %.4f\n', ss);
+fprintf('Energy Detector: %d signals detected\n', sum(detected_signals));
