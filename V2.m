@@ -60,41 +60,48 @@ roi = extractsigroi(abs(complexSignal_cpu), roiLimits);
 % Visualizations
 figure('Position', [100, 100, 1200, 1200]);
 
-% Plot original signal
+% Spectrogram
 subplot(4, 3, 1);
-plot(abs(complexSignal_cpu));
-title('Original Signal Magnitude');
-xlabel('Sample');
-ylabel('Magnitude');
+spectrogram(complexSignal_cpu, hamming(128), 64, 256, 1024, 'yaxis');
+title('Signal Spectrogram');
+xlabel('Time (s)');
+ylabel('Frequency (Hz)');
+colorbar;
 
-% Plot ROI
+% Extracted Signal ROIs with PSD
 subplot(4, 3, 2);
 hold on;
+colors = lines(length(roi));
 for i = 1:length(roi)
-    plot(roiLimits(i,1):roiLimits(i,2), roi{i});
+    [pxx, f] = pwelch(roi{i}, [], [], [], 1024);
+    plot(f, 10*log10(pxx), 'Color', colors(i,:));
 end
 hold off;
-title('Extracted Signal ROIs');
-xlabel('Sample');
-ylabel('Magnitude');
+title('PSD of Extracted Signal ROIs');
+xlabel('Frequency (Hz)');
+ylabel('Power/Frequency (dB/Hz)');
+legend(cellstr(num2str((1:length(roi))')), 'Location', 'bestoutside');
 
-% Plot signal with change points
+% Wavelet Scattering Plot
 subplot(4, 3, 3);
-plot(abs(complexSignal_cpu));
-hold on;
-plot(changePoints, abs(complexSignal_cpu(changePoints)), 'ro');
-title('Signal with Change Points');
-xlabel('Sample');
-ylabel('Magnitude');
+sn = waveletScattering('SignalLength', numel(complexSignal_cpu), 'SamplingFrequency', 1024);
+[wst_real, wstInfo] = featureMatrix(sn, real(complexSignal_cpu));
+[wst_imag, ~] = featureMatrix(sn, imag(complexSignal_cpu));
+wst = [wst_real; wst_imag]; % Combine real and imaginary parts
+imagesc(wst);
+title('Wavelet Scattering Transform (Real & Imag)');
+xlabel('Scattering Path');
+ylabel('Time');
+colorbar;
 
 % Plot time-frequency ridge
 subplot(4, 3, 4);
-imagesc(t, f, abs(s));
+imagesc(t, f, log10(abs(s) + eps)); % Use log scale for better visibility
 hold on;
 plot(t, fridge, 'r', 'LineWidth', 2);
 hold off;
 axis xy;
-title('Time-Frequency Ridge');
+title('Time-Frequency Ridge (Log Scale)');
 xlabel('Time');
 ylabel('Frequency');
 colorbar;
@@ -106,46 +113,92 @@ title('Instantaneous Bandwidth');
 xlabel('Sample');
 ylabel('Bandwidth');
 
-% Plot spectral features
+
+% Plot spectral features with color
 subplot(4, 3, 6);
-plot(features);
-title('Spectral Features');
-xlabel('Frame');
+meanFeatures = mean(features, 1);
+stdFeatures = std(features, 0, 1);
+
+% Create color map
+cmap = jet(256);
+colormap(cmap);
+
+% Normalize mean features to map to color scale
+normalizedMean = (meanFeatures - min(meanFeatures)) / (max(meanFeatures) - min(meanFeatures));
+colors = interp1(linspace(0,1,256), cmap, normalizedMean);
+
+% Plot with color
+for i = 1:length(meanFeatures)
+    h = errorbar(i, meanFeatures(i), stdFeatures(i), 'o');
+    set(h, 'Color', colors(i,:), 'MarkerFaceColor', colors(i,:));
+    hold on;
+end
+
+title('Mean Spectral Features with Standard Deviation');
+xlabel('Feature Index');
 ylabel('Feature Value');
+xlim([0 length(meanFeatures)+1]);
+
+% Add colorbar
+c = colorbar;
+ylabel(c, 'Normalized Feature Magnitude');
+
+% Adjust colorbar limits to match the data
+caxis([min(meanFeatures) max(meanFeatures)]);
+
+hold off;
+
+
+% STFT with Instantaneous Frequency
+subplot(4, 3, 7);
+[s, f, t] = stft(complexSignal_cpu, 1024, 'Window', hamming(128), 'OverlapLength', 64, 'FFTLength', 256);
+imagesc(t, f, abs(s));
+axis xy;
+hold on;
+[instf, t_instf] = instfreq(complexSignal_cpu, 1024);
+plot(t_instf, instf, 'r', 'LineWidth', 2);
+hold off;
+title('STFT with Instantaneous Frequency');
+xlabel('Time (s)');
+ylabel('Frequency (Hz)');
+colorbar;
 
 % CWT Scalogram
-subplot(4, 3, 7);
+subplot(4, 3, 8);
 fb = cwtfilterbank('SignalLength', numel(complexSignal_cpu), 'SamplingFrequency', 1024);
 [cfs, frq] = cwt(complexSignal_cpu, 'FilterBank', fb);
-
-% Create time vector
 t = (0:numel(complexSignal_cpu)-1) / 1024;
+cfs_mag = abs(cfs);
 
-% Calculate magnitude of CWT coefficients
-cfs_mag = abs(cfs(:,:,1) + 1i*cfs(:,:,2));
+% Handle 3D cfs_mag
+if size(cfs_mag, 3) > 1
+    % Take the mean across the third dimension
+    cfs_mag = mean(cfs_mag, 3);
+end
 
-% Plot the scalogram
+% Ensure cfs_mag is oriented correctly
+if size(cfs_mag, 1) ~= length(frq)
+    cfs_mag = cfs_mag';
+end
+
+disp(['Size of cfs_mag: ', mat2str(size(cfs_mag))]);
+disp(['Length of t: ', num2str(length(t))]);
+disp(['Length of frq: ', num2str(length(frq))]);
+
 imagesc(t, frq, cfs_mag);
-axis xy; % To ensure low frequencies are at the bottom
+axis xy;
 colormap('jet');
 xlabel('Time (s)'); ylabel('Frequency (Hz)');
 title('CWT Scalogram');
 colorbar;
 
-% Display size information
-disp(['Size of complexSignal_cpu: ', num2str(size(complexSignal_cpu))]);
-disp(['Size of cfs: ', num2str(size(cfs))]);
-disp(['Size of cfs_mag: ', num2str(size(cfs_mag))]);
-
-
 % MODWT
-subplot(4, 3, 8);
+subplot(4, 3, 9);
 wt = modwt(real(complexSignal_cpu), 'sym4', 5);
-% Replace plotmodwt with custom plotting
 levels = size(wt, 1);
 t = 1:size(wt, 2);
 for i = 1:levels
-    plot(t, wt(i,:) + i*2); % Offset each level for visibility
+    plot(t, wt(i,:) + i*2);
     hold on;
 end
 hold off;
@@ -155,26 +208,28 @@ xlabel('Time');
 ylabel('Level');
 title('MODWT Coefficients');
 
-% Replace Mel Spectrogram with STFT
-subplot(4, 3, 9);
+% STFT Spectrogram
+subplot(4, 3, 10);
 [S,F,T] = spectrogram(real(complexSignal_cpu), hamming(256), 128, 256, 1024);
-S_db = 10*log10(abs(S) + eps);  % Convert to dB scale
+S_db = 10*log10(abs(S) + eps);
 surf(T, F, S_db, 'EdgeColor', 'none');
 axis tight; view(0, 90);
 xlabel('Time (s)'); ylabel('Frequency (Hz)');
 title('STFT Spectrogram');
 colorbar;
 
-% Wavelet Scattering Transform
+% Wavelet Scattering Features Difference (Real - Imag)
 subplot(4, 3, 10);
 sn = waveletScattering('SignalLength', numel(complexSignal_cpu), 'SamplingFrequency', 1024);
 scatter_features_real = featureMatrix(sn, real(complexSignal_cpu));
 scatter_features_imag = featureMatrix(sn, imag(complexSignal_cpu));
-scatter_features = [scatter_features_real; scatter_features_imag];  % Combine features
-imagesc(scatter_features);
-xlabel('Scattering Path'); ylabel('Time');
-title('Wavelet Scattering Features (Real & Imag)');
+scatter_features_diff = scatter_features_real - scatter_features_imag;
+imagesc(scatter_features_diff);
+xlabel('Scattering Path');
+ylabel('Time');
+title('Wavelet Scattering Features (Real - Imag)');
 colorbar;
+colormap(jet); % Use jet colormap for better visibility of differences
 
 % Calculate signal power for coloring
 signal_power = sum(abs(X_test).^2, 2);
