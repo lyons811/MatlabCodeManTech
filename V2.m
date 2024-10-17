@@ -176,32 +176,61 @@ xlabel('Scattering Path'); ylabel('Time');
 title('Wavelet Scattering Features (Real & Imag)');
 colorbar;
 
+% Calculate signal power for coloring
+signal_power = sum(abs(X_test).^2, 2);
+
 % PCA on the entire dataset
 subplot(4, 3, 11);
 try
     [coeff, score, latent] = pca(gather(X_test(:,:)));
-    scatter(score(:,1), score(:,2), 10, 'filled');
+    
+    % Ensure signal_power matches the number of points in score
+    signal_power_plot = gather(signal_power(1:size(score,1)));
+    
+    % Print diagnostic information
+    disp(['Size of score: ', num2str(size(score))]);
+    disp(['Size of signal_power_plot: ', num2str(size(signal_power_plot))]);
+    
+    scatter(score(:,1), score(:,2), 10, signal_power_plot, 'filled');
     xlabel('First Principal Component');
     ylabel('Second Principal Component');
-    title('PCA of Dataset');
+    title('PCA of Dataset (Colored by Signal Power)');
+    colorbar;
+    colormap(jet);
 catch ME
-    warning('PCA failed: %s\nTrying with a subset of data...', ME.message);
+    warning('%s\nTrying with a subset of data...', ME.message);
     subset = X_test(1:min(5000, size(X_test, 1)), :);
+    subset_power = signal_power(1:min(5000, size(X_test, 1)));
     [coeff, score, latent] = pca(gather(subset));
-    scatter(score(:,1), score(:,2), 10, 'filled');
+    
+    % Print diagnostic information
+    disp(['Size of score (subset): ', num2str(size(score))]);
+    disp(['Size of subset_power: ', num2str(size(subset_power))]);
+    
+    scatter(score(:,1), score(:,2), 10, gather(subset_power), 'filled');
     xlabel('First Principal Component');
     ylabel('Second Principal Component');
-    title('PCA of Dataset Subset');
+    title('PCA of Dataset Subset (Colored by Signal Power)');
+    colorbar;
+    colormap(jet);
 end
 
 % t-SNE on a subset of the data
 subplot(4, 3, 12);
 rng default % for reproducibility
 subset = gather(X_test(1:1000,:));
-Y = tsne(subset, 'Verbose', 1);  % Add 'Verbose', 1 to show progress
-scatter(Y(:,1), Y(:,2), 10, 'filled');
+subset_power = gather(signal_power(1:1000));
+
+% Print diagnostic information
+disp(['Size of subset: ', num2str(size(subset))]);
+disp(['Size of subset_power: ', num2str(size(subset_power))]);
+
+Y = tsne(subset, 'Verbose', 1); % Add 'Verbose', 1 to show progress
+scatter(Y(:,1), Y(:,2), 10, subset_power, 'filled');
 xlabel('t-SNE 1'); ylabel('t-SNE 2');
-title('t-SNE of Subset');
+title('t-SNE of Subset (Colored by Signal Power)');
+colorbar;
+colormap(jet);
 
 % Display spectral analysis results
 fprintf('Spectral Entropy: %.4f\n', se);
