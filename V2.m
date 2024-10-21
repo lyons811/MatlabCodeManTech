@@ -198,14 +198,17 @@ xlabel('Time');
 ylabel('Level');
 title('MODWT Coefficients');
 
-% 10. STFT Spectrogram
+% 10. STFT Spectrogram (3D)
 subplot(4, 4, 10);
 [S_spec, F_spec, T_spec] = spectrogram(real(complexSignal_cpu), hamming(256), 128, 256, 1024);
 S_db = 10*log10(abs(S_spec) + eps);
 surf(T_spec, F_spec, S_db, 'EdgeColor', 'none');
-axis tight; view(0, 90);
-xlabel('Time (s)'); ylabel('Frequency (Hz)');
-title('STFT Spectrogram');
+axis tight;
+view(-15, 60); % Adjust view angle
+xlabel('Time (s)');
+ylabel('Frequency (Hz)');
+zlabel('Magnitude (dB)');
+title('STFT Spectrogram (3D)');
 colorbar;
 
 % 11. Wavelet Scattering Features Difference (Real - Imag)
