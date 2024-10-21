@@ -16,6 +16,7 @@ catch
 end
 
 fig = figure('Position', [100, 100, 1800, 1200], 'Units', 'normalized', 'OuterPosition', [0 0 1 1]);
+set(fig, 'PaperPositionMode', 'auto');
 
 % Set minimum size constraints
 set(fig, 'Units', 'pixels');
@@ -96,6 +97,10 @@ xlabel('Time (s)');
 ylabel('Frequency (Hz)');
 colorbar;
 
+set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
+set(gca, 'Position', get(gca, 'OuterPosition') - ...
+    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
+
 % 2. Extracted Signal ROIs with PSD
 subplot(4, 4, 2);
 hold on;
@@ -113,6 +118,10 @@ xlabel('Frequency (Hz)');
 ylabel('Power/Frequency (dB/Hz)');
 legend(cellstr(num2str((1:length(roi))')), 'Location', 'bestoutside');
 
+set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
+set(gca, 'Position', get(gca, 'OuterPosition') - ...
+    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
+
 % 3. Wavelet Scattering Plot
 subplot(4, 4, 3);
 sn = waveletScattering('SignalLength', numel(complexSignal_cpu), 'SamplingFrequency', 1024);
@@ -125,6 +134,10 @@ xlabel('Scattering Path');
 ylabel('Time');
 colorbar;
 
+set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
+set(gca, 'Position', get(gca, 'OuterPosition') - ...
+    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
+
 % 4. Plot time-frequency ridge
 subplot(4, 4, 4);
 imagesc(t, f, log10(abs(s) + eps));
@@ -134,12 +147,20 @@ xlabel('Time');
 ylabel('Frequency');
 colorbar;
 
+set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
+set(gca, 'Position', get(gca, 'OuterPosition') - ...
+    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
+
 % 5. Plot instantaneous bandwidth
 subplot(4, 4, 5);
 plot(ibw);
 title('Instantaneous Bandwidth');
 xlabel('Sample');
 ylabel('Bandwidth');
+
+set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
+set(gca, 'Position', get(gca, 'OuterPosition') - ...
+    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
 
 % 6. Plot spectral features with color
 subplot(4, 4, 6);
@@ -163,6 +184,10 @@ ylabel(c, 'Normalized Feature Magnitude');
 caxis([0 1]);
 hold off;
 
+set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
+set(gca, 'Position', get(gca, 'OuterPosition') - ...
+    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
+
 % 7. STFT with Instantaneous Frequency
 subplot(4, 4, 7);
 window_gpu_stft = gpuArray(hamming(128));
@@ -175,6 +200,10 @@ title('STFT');
 xlabel('Time (s)');
 ylabel('Frequency (Hz)');
 colorbar;
+
+set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
+set(gca, 'Position', get(gca, 'OuterPosition') - ...
+    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
 
 % 8. CWT Scalogram
 subplot(4, 4, 8);
@@ -195,6 +224,10 @@ xlabel('Time (s)'); ylabel('Frequency (Hz)');
 title('CWT Scalogram');
 colorbar;
 
+set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
+set(gca, 'Position', get(gca, 'OuterPosition') - ...
+    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
+
 % 9. MODWT
 subplot(4, 4, 9);
 wt = modwt(real(complexSignal_cpu), 'sym4', 5);
@@ -211,6 +244,10 @@ xlabel('Time');
 ylabel('Level');
 title('MODWT Coefficients');
 
+set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
+set(gca, 'Position', get(gca, 'OuterPosition') - ...
+    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
+
 % 10. STFT Spectrogram (3D)
 subplot(4, 4, 10);
 [S_spec, F_spec, T_spec] = spectrogram(real(complexSignal_cpu), hamming(256), 128, 256, 1024);
@@ -224,6 +261,10 @@ zlabel('Magnitude (dB)');
 title('STFT Spectrogram (3D)');
 colorbar;
 
+set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
+set(gca, 'Position', get(gca, 'OuterPosition') - ...
+    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
+
 % 11. Wavelet Scattering Features Difference (Real - Imag)
 subplot(4, 4, 11);
 scatter_features_real = featureMatrix(sn, real(complexSignal_cpu));
@@ -235,6 +276,10 @@ ylabel('Time');
 title('Wavelet Scattering Features (Real - Imag)');
 colorbar;
 colormap(jet);
+
+set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
+set(gca, 'Position', get(gca, 'OuterPosition') - ...
+    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
 
 % 12. PCA on the entire dataset
 subplot(4, 4, 12);
@@ -250,6 +295,10 @@ title('PCA of Dataset (Colored by Signal Power)');
 colorbar;
 colormap(jet);
 
+set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
+set(gca, 'Position', get(gca, 'OuterPosition') - ...
+    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
+
 % 13. t-SNE on a subset of the data
 subplot(4, 4, 13);
 rng default
@@ -261,6 +310,10 @@ xlabel('t-SNE 1'); ylabel('t-SNE 2');
 title('t-SNE of Subset (Colored by Signal Power)');
 colorbar;
 colormap(jet);
+
+set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
+set(gca, 'Position', get(gca, 'OuterPosition') - ...
+    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
 
 % 14. Energy Detector Plot
 subplot(4, 4, 14);
@@ -278,6 +331,10 @@ xlabel('Time (s)');
 ylabel('Signal Energy');
 legend('Signal Energy', 'Threshold', 'Detected Signals');
 
+set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
+set(gca, 'Position', get(gca, 'OuterPosition') - ...
+    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
+
 % 16. 3D Spectrogram Plot (replacing Waterfall Plot)
 subplot(4, 4, 15);
 [S, F, T] = spectrogram(complexSignal_gpu, hamming(256), 128, 512, 1024);
@@ -291,16 +348,35 @@ zlabel('Magnitude (dB)');
 title('3D Spectrogram');
 colorbar;
 
+set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
+set(gca, 'Position', get(gca, 'OuterPosition') - ...
+    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
 
-ax = findall(fig, 'type', 'axes');
-set(ax, 'FontSize', 10);
-set(findall(ax, 'type', 'text'), 'FontSize', 10);
-set(findall(fig, 'type', 'colorbar'), 'FontSize', 10);
 
-% Adjust subplot spacing
-spacing = 0.03;
-subplot_margins = 0.05;
-set(fig, 'DefaultAxesPosition', [subplot_margins subplot_margins 1-2*subplot_margins 1-2*subplot_margins]);
+all_axes = findall(fig, 'type', 'axes');
+for ax = all_axes'
+    if ~strcmp(get(ax, 'Tag'), 'Colorbar')  % Skip colorbars
+        pos = get(ax, 'Position');
+        set(ax, 'Position', [pos(1) pos(2) pos(3)*1.1 pos(4)]);  % Make plots 10% wider
+        set(ax, 'XTickLabelRotation', 45);  % Rotate x labels if needed
+    end
+end
+
+% Adjust overall figure layout
+set(fig, 'Units', 'normalized');
+set(fig, 'Position', [0.1 0.1 0.8 0.8]);  % Use 80% of screen width/height
+
+% Adjust spacing between subplots
+p = get(fig, 'Position');
+spacing = 0.02;  % Reduce spacing between subplots
+margins = 0.1;   % Add margins around the edge
+height = (1 - 2*margins - 3*spacing) / 4;  % Height for each subplot
+width = (1 - 2*margins - 3*spacing) / 4;   % Width for each subplot
+
+% Tighten the layout
+set(fig, 'Units', 'normalized');
+tightInset = get(gca, 'TightInset');
+set(fig, 'Position', [p(1) p(2) p(3)+tightInset(1)+tightInset(3) p(4)+tightInset(2)+tightInset(4)]);
 
 % Display spectral analysis results
 fprintf('Spectral Entropy: %.4f\n', se);
