@@ -15,6 +15,19 @@ catch
     error('Unable to load X_test.mat. Please ensure the file is in the current directory.');
 end
 
+fig = figure('Position', [100, 100, 1800, 1200], 'Units', 'normalized', 'OuterPosition', [0 0 1 1]);
+
+% Set minimum size constraints
+set(fig, 'Units', 'pixels');
+screensize = get(0, 'Screensize');
+minWidth = min(1800, screensize(3)-100);
+minHeight = min(1200, screensize(4)-100);
+figPosition = get(fig, 'Position');
+newPosition = [figPosition(1), figPosition(2), ...
+               max(minWidth, figPosition(3)), ...
+               max(minHeight, figPosition(4))];
+set(fig, 'Position', newPosition);
+
 % Select a random signal for analysis
 signalIndex = randi(size(X_test_gpu, 1));
 if ndims(X_test_gpu) == 3
@@ -277,6 +290,17 @@ ylabel('Frequency (Hz)');
 zlabel('Magnitude (dB)');
 title('3D Spectrogram');
 colorbar;
+
+
+ax = findall(fig, 'type', 'axes');
+set(ax, 'FontSize', 10);
+set(findall(ax, 'type', 'text'), 'FontSize', 10);
+set(findall(fig, 'type', 'colorbar'), 'FontSize', 10);
+
+% Adjust subplot spacing
+spacing = 0.03;
+subplot_margins = 0.05;
+set(fig, 'DefaultAxesPosition', [subplot_margins subplot_margins 1-2*subplot_margins 1-2*subplot_margins]);
 
 % Display spectral analysis results
 fprintf('Spectral Entropy: %.4f\n', se);
