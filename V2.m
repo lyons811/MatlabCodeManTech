@@ -205,7 +205,7 @@ set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
 set(gca, 'Position', get(gca, 'OuterPosition') - ...
     get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
 
-% 8. CWT Scalogram
+% 8. CWT Scalogram (3D)
 subplot(4, 4, 8);
 fb = cwtfilterbank('SignalLength', numel(complexSignal_cpu), 'SamplingFrequency', 1024);
 [cfs, frq] = cwt(complexSignal_cpu, 'FilterBank', fb);
@@ -217,12 +217,26 @@ end
 if size(cfs_mag, 1) ~= length(frq)
     cfs_mag = cfs_mag';
 end
-imagesc(t_cwt, frq, cfs_mag);
-axis xy;
+
+% Create meshgrid for 3D plotting
+[T, F] = meshgrid(t_cwt, frq);
+
+% Create 3D surface plot
+surf(T, F, cfs_mag, 'EdgeColor', 'none');
+% Alternative: Use waterfall plot
+% waterfall(T, F, cfs_mag);
+
+% Set colormap and other visual properties
 colormap('jet');
-xlabel('Time (s)'); ylabel('Frequency (Hz)');
-title('CWT Scalogram');
+xlabel('Time (s)');
+ylabel('Frequency (Hz)');
+zlabel('Magnitude');
+title('CWT Scalogram (3D)');
 colorbar;
+
+% Adjust the view angle for better visualization
+view(-45, 45);  % You can adjust these angles as needed
+lighting gouraud;
 
 set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
 set(gca, 'Position', get(gca, 'OuterPosition') - ...
