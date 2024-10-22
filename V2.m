@@ -123,6 +123,13 @@ set(gca, 'Position', get(gca, 'OuterPosition') - ...
     get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
 
 % 3. 3D Wavelet Scattering Transform
+% Create and configure wavelet scattering network
+sf = 1024; % Sampling frequency
+sn = waveletScattering('SignalLength', numel(complexSignal_cpu), ...
+                      'SamplingFrequency', sf, ...
+                      'InvarianceScale', 0.5, ... % Adjust this value based on your needs
+                      'QualityFactors', [8 1]); % First and second filter bank quality factors
+fprintf('Wavelet scattering network created.\n');
 subplot(4, 4, 3);
 [wst_real, wstInfo] = featureMatrix(sn, real(complexSignal_cpu));
 [wst_imag, ~] = featureMatrix(sn, imag(complexSignal_cpu));
