@@ -122,17 +122,20 @@ set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
 set(gca, 'Position', get(gca, 'OuterPosition') - ...
     get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
 
-% 3. Wavelet Scattering Plot
+% 3. 3D Wavelet Scattering Transform
 subplot(4, 4, 3);
-sn = waveletScattering('SignalLength', numel(complexSignal_cpu), 'SamplingFrequency', 1024);
 [wst_real, wstInfo] = featureMatrix(sn, real(complexSignal_cpu));
 [wst_imag, ~] = featureMatrix(sn, imag(complexSignal_cpu));
 wst = [wst_real; wst_imag];
-imagesc(wst);
-title('Wavelet Scattering Transform (Real & Imag)');
+[X_wst, Y_wst] = meshgrid(1:size(wst,2), 1:size(wst,1));
+surf(X_wst, Y_wst, wst, 'EdgeColor', 'none');
+title('3D Wavelet Scattering Transform');
 xlabel('Scattering Path');
 ylabel('Time');
+zlabel('Magnitude');
+view(-45, 45);
 colorbar;
+lighting phong;
 
 set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
 set(gca, 'Position', get(gca, 'OuterPosition') - ...
@@ -162,43 +165,46 @@ set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
 set(gca, 'Position', get(gca, 'OuterPosition') - ...
     get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
 
-% 6. Plot spectral features with color
+% 6. 3D Spectral Features Plot
 subplot(4, 4, 6);
-meanFeatures = mean(features, 1);
-stdFeatures = std(features, 0, 1);
-cmap = jet(256);
-colormap(cmap);
-normalizedMean = (meanFeatures - min(meanFeatures)) / (max(meanFeatures) - min(meanFeatures));
-colors_plot = interp1(linspace(0,1,256), cmap, normalizedMean, 'linear', 'extrap');
-for i = 1:length(meanFeatures)
-    h = errorbar(i, meanFeatures(i), stdFeatures(i), 'o');
-    set(h, 'Color', colors_plot(i,:), 'MarkerFaceColor', colors_plot(i,:));
-    hold on;
-end
-title('Mean Spectral Features with Standard Deviation');
+[X_feat, Y_feat] = meshgrid(1:size(features,2), 1:size(features,1));
+surf(X_feat, Y_feat, features, 'EdgeColor', 'none');
+title('3D Spectral Features');
 xlabel('Feature Index');
-ylabel('Feature Value');
-xlim([0 length(meanFeatures)+1]);
-c = colorbar;
-ylabel(c, 'Normalized Feature Magnitude');
-caxis([0 1]);
-hold off;
+ylabel('Time Window');
+zlabel('Feature Value');
+view(-45, 45);
+colorbar;
+lighting phong;
+colormap(jet);
 
 set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
 set(gca, 'Position', get(gca, 'OuterPosition') - ...
     get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
 
-% 7. STFT with Instantaneous Frequency
+% 7. 3D STFT Plot
 subplot(4, 4, 7);
 window_gpu_stft = gpuArray(hamming(128));
 [S_stft_gpu, F_stft, T_stft] = stft(complexSignal_gpu, 1024, 'Window', window_gpu_stft, ...
     'OverlapLength', 64, 'FFTLength', 256);
 S_stft = gather(S_stft_gpu);
-imagesc(T_stft, F_stft, abs(S_stft));
-axis xy;
-title('STFT');
+
+% Create meshgrid for 3D surface
+[T_mesh, F_mesh] = meshgrid(T_stft, F_stft);
+S_stft_mag = 20*log10(abs(S_stft) + eps); % Convert to dB scale
+
+% Create 3D surface plot
+surf(T_mesh, F_mesh, S_stft_mag, 'EdgeColor', 'none');
+view(-45, 45);
+lighting phong;
+camlight('headlight');
+material([0.7 0.9 0.3 1]);
+shading interp;
+
+title('3D STFT');
 xlabel('Time (s)');
 ylabel('Frequency (Hz)');
+zlabel('Magnitude (dB)');
 colorbar;
 
 set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
@@ -279,17 +285,32 @@ set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
 set(gca, 'Position', get(gca, 'OuterPosition') - ...
     get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
 
-% 11. Wavelet Scattering Features Difference (Real - Imag)
+% 11. 3D Wavelet Scattering Features Difference
 subplot(4, 4, 11);
 scatter_features_real = featureMatrix(sn, real(complexSignal_cpu));
 scatter_features_imag = featureMatrix(sn, imag(complexSignal_cpu));
 scatter_features_diff = scatter_features_real - scatter_features_imag;
-imagesc(scatter_features_diff);
+
+% Create meshgrid for 3D visualization
+[X_scat, Y_scat] = meshgrid(1:size(scatter_features_diff,2), 1:size(scatter_features_diff,1));
+
+% Create 3D surface plot
+surf(X_scat, Y_scat, scatter_features_diff, 'EdgeColor', 'none');
+view(-45, 45);
+lighting phong;
+camlight('headlight');
+material([0.7 0.9 0.3 1]);
+shading interp;
+
+title('3D Wavelet Scattering Features (Real - Imag)');
 xlabel('Scattering Path');
 ylabel('Time');
-title('Wavelet Scattering Features (Real - Imag)');
+zlabel('Difference Magnitude');
 colorbar;
 colormap(jet);
+
+% Add grid for better depth perception
+grid on;
 
 set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
 set(gca, 'Position', get(gca, 'OuterPosition') - ...
