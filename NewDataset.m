@@ -247,23 +247,50 @@ xlabel('Frequency (Hz)');
 ylabel('Power/Frequency (dB/Hz)');
 legend(arrayfun(@(x) sprintf('ROI %d', x), 1:length(roi), 'UniformOutput', false), 'Location', 'bestoutside');
 
+% Step 1: Initialize waveletScattering without attempting to set InvarianceScale post-creation
+try
+    sf = waveletScattering('SignalLength', 1024, ...
+                           'SamplingFrequency', 1024, ...
+                           'QualityFactor', 8);
+    fprintf('waveletScattering object successfully created.\n');
+catch ME
+    fprintf('Error creating waveletScattering object: %s\n', ME.message);
+    disp(getReport(ME, 'extended'));
+    return; % Exit or handle as needed
+end
+
+
+
+
 % Plot 3: 3D Wavelet Scattering Transform
 subplot(4, 4, 3);
-[wst_real, wstInfo] = featureMatrix(sn, real(complexSignal));
-[wst_imag, ~] = featureMatrix(sn, imag(complexSignal));
-wst = [wst_real; wst_imag];
-[X_wst, Y_wst] = meshgrid(1:size(wst,2), 1:size(wst,1));
-surf(X_wst, Y_wst, wst, 'EdgeColor', 'none');
-title('3D Wavelet Scattering Transform');
-xlabel('Scattering Path');
-ylabel('Time');
-zlabel('Magnitude');
-view(-45, 45);
-colorbar;
-lighting phong;
-camlight('headlight');
-material([0.7 0.9 0.3 1]);
-shading interp;
+try
+    % Option 1: Use the real part of the complex signal
+    realSignal = real(complexSignal);
+    
+    % Compute scattering coefficients on the real part of the signal
+    wst = sf.featureMatrix(realSignal);
+    
+    % Create visualization
+    [X_wst, Y_wst] = meshgrid(1:size(wst,2), 1:size(wst,1));
+    surf(X_wst, Y_wst, abs(wst), 'EdgeColor', 'none');
+    title(sprintf('3D Wavelet Scattering Transform (Real Part)\n%s, SNR: %.2f dB', classes{modIndex}, snr));
+    xlabel('Scattering Path');
+    ylabel('Time');
+    zlabel('Magnitude');
+    view(-45, 45);
+    colorbar;
+    lighting phong;
+    camlight('headlight');
+    material([0.7 0.9 0.3 1]);
+    shading interp;
+catch ME
+    fprintf('Error in wavelet scattering analysis: %s\n', ME.message);
+    text(0.5, 0.5, 'Error in Wavelet Analysis', ...
+        'HorizontalAlignment', 'center', 'Color', 'red');
+    axis off;
+end
+
 
 % --- Replacement for Plot 4: Instantaneous Frequency (IF) Plot ---
 subplot(4, 4, 4);
@@ -421,27 +448,36 @@ shading interp;
 
 % Plot 11: 3D Wavelet Scattering Features Difference
 subplot(4, 4, 11);
-scatter_features_real = featureMatrix(sn, real(complexSignal));
-scatter_features_imag = featureMatrix(sn, imag(complexSignal));
-scatter_features_diff = scatter_features_real - scatter_features_imag;
+try
+    % Compute scattering coefficients for real and imaginary parts separately
+    wst_real = sf.featureMatrix(real(complexSignal));
+    wst_imag = sf.featureMatrix(imag(complexSignal));
+    scatter_features_diff = abs(wst_real) - abs(wst_imag);
+    
+    % Create meshgrid for 3D visualization
+    [X_scat, Y_scat] = meshgrid(1:size(scatter_features_diff,2), 1:size(scatter_features_diff,1));
+    
+    % Create 3D surface plot
+    surf(X_scat, Y_scat, scatter_features_diff, 'EdgeColor', 'none');
+    view(-45, 45);
+    lighting phong;
+    camlight('headlight');
+    material([0.7 0.9 0.3 1]);
+    shading interp;
+    title('3D Wavelet Scattering Features (Real - Imag)');
+    xlabel('Scattering Path');
+    ylabel('Time');
+    zlabel('Difference Magnitude');
+    colorbar;
+    colormap(jet);
+    grid on;
+catch ME
+    fprintf('Error in wavelet scattering difference analysis: %s\n', ME.message);
+    text(0.5, 0.5, 'Error in Wavelet Analysis', ...
+        'HorizontalAlignment', 'center', 'Color', 'red');
+    axis off;
+end
 
-% Create meshgrid for 3D visualization
-[X_scat, Y_scat] = meshgrid(1:size(scatter_features_diff,2), 1:size(scatter_features_diff,1));
-
-% Create 3D surface plot
-surf(X_scat, Y_scat, scatter_features_diff, 'EdgeColor', 'none');
-view(-45, 45);
-lighting phong;
-camlight('headlight');
-material([0.7 0.9 0.3 1]);
-shading interp;
-title('3D Wavelet Scattering Features (Real - Imag)');
-xlabel('Scattering Path');
-ylabel('Time');
-zlabel('Difference Magnitude');
-colorbar;
-colormap(jet);
-grid on;
 
 % Plot 12: Enhanced Signal Constellation Diagram
 subplot(4, 4, 12);
