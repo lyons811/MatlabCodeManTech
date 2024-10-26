@@ -3,7 +3,7 @@ g = gpuDevice(1);
 reset(g);
 fprintf('GPU enabled for processing. Available GPU memory: %.2f GB\n', g.AvailableMemory/1e9);
 
-% Define modulation classes
+% Define modulation classes for DeepSig RadioML 2018.01A
 classes = {'OOK', 'ASK4', 'ASK8', 'BPSK', 'QPSK', 'PSK8', 'PSK16', 'PSK32', ...
            'APSK16', 'APSK32', 'APSK64', 'APSK128', 'QAM16', 'QAM32', 'QAM64', ...
            'QAM128', 'QAM256', 'AM_SSB_WC', 'AM_SSB_SC', 'AM_DSB_WC', ...
@@ -13,7 +13,7 @@ try
     % Open the HDF5 file
     filename = 'GOLD_XYZ_OSC.0001_1024.hdf5';
     
-    % First, let's verify file access
+    % Verify file access
     if ~exist(filename, 'file')
         error('File not found: %s', filename);
     end
@@ -58,7 +58,7 @@ try
     [~, dims_y] = H5S.get_simple_extent_dims(space_y_id);
     fprintf('Y dataset dimensions: %s\n', mat2str(dims_y));
     
-    % Define hyperslab for Y - matching the actual data layout
+    % Define hyperslab for Y
     start_y = [0 0];  % Start from beginning
     count_y = [num_samples 24];  % Read num_samples frames, all 24 modulation types
     
@@ -102,7 +102,7 @@ try
     % Get modulation type and SNR for first sample
     [~, modIndex] = max(Y_data(:,1)); % Get modulation type for first sample
     snr = Z_data(1); % Get SNR for first sample
-    
+
     % Create complex signal for first frame
     complexSignal = X_data(1,:,1) + 1j*X_data(2,:,1);
     complexSignal_gpu = gpuArray(complexSignal);
@@ -154,19 +154,6 @@ fprintf('\nScript completed successfully!\n');
 % Get modulation type and SNR for selected signal
 fprintf('Analyzing signal:\nModulation: %s\nSNR: %.2f dB\n', classes{modIndex}, snr);
 
-% Clean up GPU
-delete(g);
-
-% Display data summary
-fprintf('\nFinal Data Summary:\n');
-fprintf('X data shape: %s\n', mat2str(size(X_data)));
-fprintf('Y data shape: %s\n', mat2str(size(Y_data)));
-fprintf('Z data shape: %s\n', mat2str(size(Z_data)));
-% Display success message
-fprintf('\nScript completed successfully!\n');
-% Get modulation type and SNR for selected signal
-fprintf('Analyzing signal:\nModulation: %s\nSNR: %.2f dB\n', classes{modIndex}, snr);
-
 % Find abrupt changes in signal
 changePoints = findchangepts(abs(complexSignal), 'MaxNumChanges', 5);
 fprintf('Detected change points at indices: %s\n', mat2str(changePoints));
@@ -212,26 +199,38 @@ roiLimits = [1, 256; 257, 512; 513, 768; 769, 1024];
 roi = extractsigroi(abs(complexSignal), roiLimits);
 fprintf('Regions of Interest (ROIs) extracted.\n');
 
-fig = figure('Name', 'Signal Analysis', 'Position', [100 100 1200 800]);
+% Create figure for plots
+fig = figure('Name', 'Signal Analysis - DeepSig RadioML 2018.01A', 'Position', [100 100 1200 800]);
 
-% Modified Signal Spectrogram code
+% Plot 1: Enhanced Spectrogram
 subplot(4, 4, 1);
-window = hamming(256);  % Increased window size
-noverlap = 192;        % 75% overlap for smoother visualization
-nfft = 512;            % Increased FFT points
-[s, f, t] = spectrogram(complexSignal, window, noverlap, nfft, 1024, 'yaxis');
-spectrogram(complexSignal, window, noverlap, nfft, 1024, 'yaxis');
+window_size = 256;
+noverlap = 192;
+nfft = 512;
+fs = 1024; % Sampling frequency
+
+% Compute spectrogram
+[s, f, t] = spectrogram(complexSignal, hamming(window_size), noverlap, nfft, fs, 'yaxis');
+
+% Convert to dB scale
+s_db = 10*log10(abs(s) + eps);
+
+% Dynamic Clipping based on data
+min_db = min(s_db(:));
+max_db = max(s_db(:));
+clim_range = [min_db, max_db]; % Adjust as needed
+
+% Plot using imagesc
+imagesc(t, f, s_db);
+axis xy;
 title(sprintf('Signal Spectrogram\n%s, SNR: %.2f dB', classes{modIndex}, snr));
 xlabel('Time (s)');
 ylabel('Frequency (Hz)');
-colormap(jet);  % Using jet colormap for better contrast
-clim([-140 -40]);  % Adjust color limits to highlight important features
+colormap(jet);
+caxis(clim_range); % Set color limits dynamically
 colorbar;
 
-set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
-set(gca, 'Position', get(gca, 'OuterPosition') - ...
-    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
-
+% Plot 2: PSD of Extracted Signal ROIs
 subplot(4, 4, 2);
 hold on;
 colors = lines(length(roi));
@@ -246,16 +245,9 @@ hold off;
 title(sprintf('PSD of Extracted Signal ROIs\n%s', classes{modIndex}));
 xlabel('Frequency (Hz)');
 ylabel('Power/Frequency (dB/Hz)');
-legend(cellstr(num2str((1:length(roi))')), 'Location', 'bestoutside');
+legend(arrayfun(@(x) sprintf('ROI %d', x), 1:length(roi), 'UniformOutput', false), 'Location', 'bestoutside');
 
-% 3. 3D Wavelet Scattering Transform
-% Create and configure wavelet scattering network
-sf = 1024; % Sampling frequency
-sn = waveletScattering('SignalLength', numel(complexSignal), ...
-                      'SamplingFrequency', sf, ...
-                      'InvarianceScale', 0.5, ... % Adjust this value based on your needs
-                      'QualityFactors', [8 1]); % First and second filter bank quality factors
-fprintf('Wavelet scattering network created.\n');
+% Plot 3: 3D Wavelet Scattering Transform
 subplot(4, 4, 3);
 [wst_real, wstInfo] = featureMatrix(sn, real(complexSignal));
 [wst_imag, ~] = featureMatrix(sn, imag(complexSignal));
@@ -269,16 +261,15 @@ zlabel('Magnitude');
 view(-45, 45);
 colorbar;
 lighting phong;
+camlight('headlight');
+material([0.7 0.9 0.3 1]);
+shading interp;
 
-set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
-set(gca, 'Position', get(gca, 'OuterPosition') - ...
-    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
-
-% Modified Time-Frequency Ridge plot
+% Plot 4: Time-Frequency Ridge (Log Scale)
 subplot(4, 4, 4);
-window_size = 256;     % Increased window size
-overlap = 192;         % 75% overlap
-nfft = 512;           % Increased FFT points
+window_size = 256;
+overlap = 192;
+nfft = 512;
 
 [s, f, t] = spectrogram(complexSignal, hamming(window_size), overlap, nfft, 1024);
 s_db = 10*log10(abs(s) + eps);
@@ -290,10 +281,10 @@ s_db(s_db < threshold) = threshold;
 imagesc(t, f, s_db);
 axis xy;
 title('Time-Frequency Ridge (Log Scale)');
-xlabel('Time');
-ylabel('Frequency');
+xlabel('Time (s)');
+ylabel('Frequency (Hz)');
 colormap(jet);
-clim([threshold max(s_db(:))]);  % Set color limits
+clim([threshold max(s_db(:))]);
 colorbar;
 
 % Add ridge extraction
@@ -302,22 +293,14 @@ hold on;
 plot(t, ridge_freqs, 'w--', 'LineWidth', 1);
 hold off;
 
-set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
-set(gca, 'Position', get(gca, 'OuterPosition') - ...
-    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
-
-% 5. Plot instantaneous bandwidth
+% Plot 5: Instantaneous Bandwidth
 subplot(4, 4, 5);
-plot(ibw);
+plot(ibw, 'LineWidth', 1.5);
 title('Instantaneous Bandwidth');
 xlabel('Sample');
 ylabel('Bandwidth');
 
-set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
-set(gca, 'Position', get(gca, 'OuterPosition') - ...
-    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
-
-% 6. 3D Spectral Features Plot
+% Plot 6: 3D Spectral Features
 subplot(4, 4, 6);
 [X_feat, Y_feat] = meshgrid(1:size(features,2), 1:size(features,1));
 surf(X_feat, Y_feat, features, 'EdgeColor', 'none');
@@ -328,13 +311,11 @@ zlabel('Feature Value');
 view(-45, 45);
 colorbar;
 lighting phong;
+camlight('headlight');
 colormap(jet);
+shading interp;
 
-set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
-set(gca, 'Position', get(gca, 'OuterPosition') - ...
-    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
-
-% 7. 3D STFT Plot
+% Plot 7: 3D STFT
 subplot(4, 4, 7);
 window_gpu_stft = gpuArray(hamming(128));
 [S_stft_gpu, F_stft, T_stft] = stft(complexSignal_gpu, 1024, 'Window', window_gpu_stft, ...
@@ -359,11 +340,7 @@ ylabel('Frequency (Hz)');
 zlabel('Magnitude (dB)');
 colorbar;
 
-set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
-set(gca, 'Position', get(gca, 'OuterPosition') - ...
-    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
-
-% 8. CWT Scalogram (3D)
+% Plot 8: CWT Scalogram (3D)
 subplot(4, 4, 8);
 fb = cwtfilterbank('SignalLength', numel(complexSignal), 'SamplingFrequency', 1024);
 [cfs, frq] = cwt(complexSignal, 'FilterBank', fb);
@@ -381,26 +358,16 @@ end
 
 % Create 3D surface plot
 surf(T, F, cfs_mag, 'EdgeColor', 'none');
-% Alternative: Use waterfall plot
-% waterfall(T, F, cfs_mag);
-
-% Set colormap and other visual properties
 colormap('jet');
 xlabel('Time (s)');
 ylabel('Frequency (Hz)');
 zlabel('Magnitude');
 title('CWT Scalogram (3D)');
 colorbar;
-
-% Adjust the view angle for better visualization
-view(-45, 45);  % You can adjust these angles as needed
+view(-45, 45);
 lighting gouraud;
 
-set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
-set(gca, 'Position', get(gca, 'OuterPosition') - ...
-    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
-
-% 9. MODWT
+% Plot 9: MODWT Coefficients
 subplot(4, 4, 9);
 wt = modwt(real(complexSignal), 'sym4', 5);
 levels = size(wt, 1);
@@ -415,12 +382,9 @@ yticklabels(1:levels);
 xlabel('Time');
 ylabel('Level');
 title('MODWT Coefficients');
+grid on;
 
-set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
-set(gca, 'Position', get(gca, 'OuterPosition') - ...
-    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
-
-% 10. STFT Spectrogram (3D)
+% Plot 10: STFT Spectrogram (3D)
 subplot(4, 4, 10);
 [S_spec, F_spec, T_spec] = spectrogram(real(complexSignal), hamming(256), 128, 256, 1024);
 S_db = 10*log10(abs(S_spec) + eps);
@@ -432,12 +396,12 @@ ylabel('Frequency (Hz)');
 zlabel('Magnitude (dB)');
 title('STFT Spectrogram (3D)');
 colorbar;
+lighting phong;
+camlight('headlight');
+material([0.7 0.9 0.3 1]);
+shading interp;
 
-set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
-set(gca, 'Position', get(gca, 'OuterPosition') - ...
-    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
-
-% 11. 3D Wavelet Scattering Features Difference
+% Plot 11: 3D Wavelet Scattering Features Difference
 subplot(4, 4, 11);
 scatter_features_real = featureMatrix(sn, real(complexSignal));
 scatter_features_imag = featureMatrix(sn, imag(complexSignal));
@@ -453,37 +417,25 @@ lighting phong;
 camlight('headlight');
 material([0.7 0.9 0.3 1]);
 shading interp;
-
 title('3D Wavelet Scattering Features (Real - Imag)');
 xlabel('Scattering Path');
 ylabel('Time');
 zlabel('Difference Magnitude');
 colorbar;
 colormap(jet);
-
-% Add grid for better depth perception
 grid on;
 
-set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
-set(gca, 'Position', get(gca, 'OuterPosition') - ...
-    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
-
-% Replace PCA and t-SNE plots with more suitable visualizations for signal data
-
-% 12. Enhanced Signal Constellation Diagram
+% Plot 12: Enhanced Signal Constellation Diagram
 subplot(4, 4, 12);
-
-% Calculate signal strength/power
 signal_power = abs(complexSignal).^2;
-signal_power_db = 10*log10(signal_power);
+signal_power_db = 10*log10(signal_power + eps); % Avoid log(0)
 
-% Create scatter plot with colormap based on signal power
 scatter(real(complexSignal), imag(complexSignal), 20, signal_power_db, 'filled');
 grid on;
 xlabel('In-phase Component (I)');
 ylabel('Quadrature Component (Q)');
 title('Signal Constellation');
-colormap(gca, jet); % Use jet colormap for better visualization
+colormap(gca, jet);
 c = colorbar;
 c.Label.String = 'Signal Power (dB)';
 axis equal;
@@ -494,7 +446,7 @@ text(min(real(complexSignal)), max(imag(complexSignal)), ...
     sprintf('Modulation: %s\nSNR: %.1f dB', classes{modIndex}, snr), ...
     'VerticalAlignment', 'top', 'FontSize', 8);
 
-% 13. Cyclostationary Feature Analysis
+% Cyclostationary Feature Analysis for DeepSig RadioML 2018.01A
 subplot(4, 4, 13);
 
 try
@@ -502,74 +454,59 @@ try
     window_length = 256;
     overlap = window_length / 2;
     nfft = 512;
-    
-    % Generate lag values (reduced range for better computation)
-    max_lag = 32;  % Reduced from 64 to 32
+
+    % Generate lag values within a suitable range for radio signals
+    max_lag = 64;  % Original value; adjust if necessary
     lag_vector = -max_lag:max_lag;
-    
+
     % Initialize cyclic correlation matrix
-    cyclic_corr = zeros(length(lag_vector), nfft / 2 + 1);  % Adjusted size
-    
-    % Get complex signal as column vector
-    complexSignal = complexSignal(:);  % Ensure column vector
-    
-    % Precompute frequency vector using a dummy pwelch call
+    cyclic_corr = zeros(length(lag_vector), nfft / 2 + 1);
+
+    % Ensure complexSignal is a column vector
+    complexSignal = complexSignal(:);
+
+    % Precompute frequency vector
     dummy_product = complexSignal .* conj(complexSignal);  % Zero lag
     [~, f] = pwelch(dummy_product, hamming(window_length), overlap, nfft, 1024);
-    
-    % Ensure f is a row vector
-    f = f(:).';
-    
+    f = f(:).';  % Ensure row vector
+
     % Compute cyclic correlation for different lags
     for idx = 1:length(lag_vector)
         lag = lag_vector(idx);
-        
-        % Pad signal and create delayed version
-        padded_signal = zeros(size(complexSignal));
+
+        % Shift signal based on lag
         if lag >= 0
-            padded_signal(1:end - lag) = complexSignal(lag + 1:end);
+            padded_signal = [zeros(lag, 1); complexSignal(1:end - lag)];
         else
-            padded_signal(-lag + 1:end) = complexSignal(1:end + lag);
+            padded_signal = [complexSignal(-lag + 1:end); zeros(-lag, 1)];
         end
-        
+
         % Conjugate multiplication for correlation
         product = complexSignal .* conj(padded_signal);
-        
+
         % Compute power spectral density
         [Sxx, ~] = pwelch(product, hamming(window_length), overlap, nfft, 1024);
-        
-        % Extract one-sided PSD
-        Sxx_one_sided = Sxx(1:nfft / 2 + 1).';  % Transpose to make it a row vector
-        
-        % Store in correlation matrix
+
+        % Store one-sided PSD
+        Sxx_one_sided = Sxx(1:nfft / 2 + 1).';  % Transpose to row vector
         cyclic_corr(idx, :) = Sxx_one_sided;
     end
-    
+
     % Convert to dB scale and normalize
     cyclic_corr_db = 10 * log10(abs(cyclic_corr) + eps);
     cyclic_corr_db = cyclic_corr_db - min(cyclic_corr_db(:));
     cyclic_corr_db = cyclic_corr_db / max(cyclic_corr_db(:));
-    
-    % Ensure lag_vector is a row vector
-    lag_vector = lag_vector(:).';
-    
+
     % Create meshgrid for plotting
     [X, Y] = meshgrid(f, lag_vector);
-    
-    % Debugging: Check dimensions
-    disp(['Size of X: ', mat2str(size(X))]);
-    disp(['Size of Y: ', mat2str(size(Y))]);
-    disp(['Size of cyclic_corr_db: ', mat2str(size(cyclic_corr_db))]);
-    
-    % Ensure that all dimensions match
+
+    % Verify dimensions
     if ~isequal(size(X), size(Y), size(cyclic_corr_db))
         error('Dimensions of X, Y, and cyclic_corr_db do not match.');
     end
-    
+
     % Create 3D surface plot
     surf(X, Y, cyclic_corr_db, 'EdgeColor', 'none');
-    
-    % Enhance the visualization
     colormap(jet);
     colorbar;
     c = colorbar;
@@ -578,33 +515,33 @@ try
     ylabel('Lag');
     zlabel('Normalized Cyclic Correlation (dB)');
     title(sprintf('3D Cyclic Spectral Analysis\n%s Modulation', classes{modIndex}));
-    
+
     % Adjust view angle for better perception
-    view(45, 30);  % Adjust angles as needed
-    
+    view(45, 30);
+
     % Add lighting for depth perception
     camlight('right');
     lighting phong;
-    
+
     % Optional: Add peak marker
     [~, max_idx] = max(cyclic_corr_db(:));
     [max_row, max_col] = ind2sub(size(cyclic_corr_db), max_idx);
     hold on;
     plot3(f(max_col), lag_vector(max_row), cyclic_corr_db(max_row, max_col), 'w*', 'MarkerSize', 10, 'LineWidth', 2);
     hold off;
-    
-    % Add SNR annotation (position adjusted for 3D)
+
+    % Add SNR annotation
     text(min(f), max(lag_vector), max(cyclic_corr_db(:)), ...
         sprintf('SNR: %.1f dB', snr), ...
         'VerticalAlignment', 'bottom', 'Color', 'white', ...
         'FontSize', 8, 'BackgroundColor', 'black');
-    
+
     % Print analysis metrics
     fprintf('\nCyclic Analysis Metrics:\n');
     fprintf('Maximum correlation: %.2f\n', max(cyclic_corr_db(:)));
     fprintf('Frequency resolution: %.2f Hz\n', f(2) - f(1));
     fprintf('Number of lag points: %d\n', length(lag_vector));
-    
+
 catch ME
     % Error handling
     fprintf('Error in cyclostationary analysis: %s\n', ME.message);
@@ -620,27 +557,24 @@ set(gca, 'Position', get(gca, 'OuterPosition') - ...
     get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
 
 
-% 14. Energy Detector Plot
+% Plot 14: Energy Detector
 subplot(4, 4, 14);
-energy_threshold = 0.7 * max(abs(complexSignal_gpu).^2); % 70% of max energy as threshold
+energy_threshold = 0.7 * max(abs(complexSignal_gpu).^2); % 70% of max energy
 signal_energy = abs(complexSignal_gpu).^2;
 detected_signals = signal_energy > energy_threshold;
 t = (0:length(complexSignal_gpu)-1) / 1024; % Assuming 1024 Hz sampling rate
-plot(t, signal_energy);
+plot(t, signal_energy, 'b', 'LineWidth', 1.5);
 hold on;
-plot(t, energy_threshold * ones(size(t)), 'r--');
-plot(t(detected_signals), signal_energy(detected_signals), 'ro');
+plot(t, energy_threshold * ones(size(t)), 'r--', 'LineWidth', 1.5);
+plot(t(detected_signals), signal_energy(detected_signals), 'ro', 'MarkerSize', 4);
 hold off;
 title('Energy Detector');
 xlabel('Time (s)');
 ylabel('Signal Energy');
 legend('Signal Energy', 'Threshold', 'Detected Signals');
+grid on;
 
-set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
-set(gca, 'Position', get(gca, 'OuterPosition') - ...
-    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
-
-% 16. 3D Spectrogram Plot (replacing Waterfall Plot)
+% Plot 15: 3D Spectrogram Plot
 subplot(4, 4, 15);
 [S, F, T] = spectrogram(complexSignal_gpu, hamming(256), 128, 512, 1024);
 S_magnitude = 10*log10(abs(S) + eps); % Convert to dB scale
@@ -651,19 +585,20 @@ xlabel('Time (s)');
 ylabel('Frequency (Hz)');
 zlabel('Magnitude (dB)');
 title('3D Spectrogram');
+colormap(jet);
 colorbar;
+lighting phong;
+camlight('headlight');
+material([0.7 0.9 0.3 1]);
+shading interp;
 
-set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
-set(gca, 'Position', get(gca, 'OuterPosition') - ...
-    get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
-
-
+% Find all axes except colorbars
 all_axes = findall(fig, 'type', 'axes');
 for ax = all_axes'
     if ~strcmp(get(ax, 'Tag'), 'Colorbar')  % Skip colorbars
         pos = get(ax, 'Position');
         set(ax, 'Position', [pos(1) pos(2) pos(3)*1.1 pos(4)]);  % Make plots 10% wider
-        set(ax, 'XTickLabelRotation', 45);  % Rotate x labels if needed
+        set(ax, 'XTickLabelRotation', 45);  % Rotate x labels for better readability
     end
 end
 
@@ -671,22 +606,11 @@ end
 set(fig, 'Units', 'normalized');
 set(fig, 'Position', [0.1 0.1 0.8 0.8]);  % Use 80% of screen width/height
 
-% Adjust spacing between subplots
-p = get(fig, 'Position');
-spacing = 0.02;  % Reduce spacing between subplots
-margins = 0.1;   % Add margins around the edge
+% Reduce spacing between subplots
+spacing = 0.02;  % Reduced spacing
+margins = 0.1;   % Margins around edges
 height = (1 - 2*margins - 3*spacing) / 4;  % Height for each subplot
 width = (1 - 2*margins - 3*spacing) / 4;   % Width for each subplot
 
-% Tighten the layout
-set(fig, 'Units', 'normalized');
-tightInset = get(gca, 'TightInset');
-set(fig, 'Position', [p(1) p(2) p(3)+tightInset(1)+tightInset(3) p(4)+tightInset(2)+tightInset(4)]);
-
-% Display spectral analysis results
-fprintf('Spectral Entropy: %.4f\n', se);
-fprintf('Spectral Flatness: %.4f\n', sf);
-fprintf('Spectral Kurtosis: %.4f\n', sk);
-fprintf('Spectral Skewness: %.4f\n', ss);
-fprintf('Energy Detector: %d signals detected\n', sum(detected_signals));
-delete(g);
+% Apply tighter layout adjustments as needed
+% This section can be customized further based on specific needs
