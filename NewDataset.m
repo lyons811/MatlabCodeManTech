@@ -265,33 +265,51 @@ camlight('headlight');
 material([0.7 0.9 0.3 1]);
 shading interp;
 
-% Plot 4: Time-Frequency Ridge (Log Scale)
+% --- Replacement for Plot 4: Instantaneous Frequency (IF) Plot ---
 subplot(4, 4, 4);
-window_size = 256;
-overlap = 192;
-nfft = 512;
+try
+    % Define Sampling Frequency
+    fs = 1024; % Hz (as per your dataset)
+    dt = 1 / fs; % Sampling interval
 
-[s, f, t] = spectrogram(complexSignal, hamming(window_size), overlap, nfft, 1024);
-s_db = 10*log10(abs(s) + eps);
+    % Compute the instantaneous phase directly from the complex signal
+    instantaneousPhase = unwrap(angle(complexSignal));
 
-% Apply threshold to remove noise
-threshold = max(s_db(:)) - 40;  % 40dB below peak
-s_db(s_db < threshold) = threshold;
+    % Compute the instantaneous frequency by differentiating the phase
+    instantaneousFrequency = diff(instantaneousPhase) / (2*pi*dt); % Hz
 
-imagesc(t, f, s_db);
-axis xy;
-title('Time-Frequency Ridge (Log Scale)');
-xlabel('Time (s)');
-ylabel('Frequency (Hz)');
-colormap(jet);
-clim([threshold max(s_db(:))]);
-colorbar;
+    % Create a time vector for the instantaneous frequency
+    t_if = (0:length(instantaneousFrequency)-1) * dt;
 
-% Add ridge extraction
-[ridge_freqs, ridge_times] = tfridge(s, f, 'NumRidges', 3);
-hold on;
-plot(t, ridge_freqs, 'w--', 'LineWidth', 1);
-hold off;
+    % Plot the Instantaneous Frequency
+    plot(t_if, instantaneousFrequency, 'b', 'LineWidth', 1.5);
+    title('Instantaneous Frequency (IF)');
+    xlabel('Time (s)');
+    ylabel('Frequency (Hz)');
+    grid on;
+    hold on;
+
+    % Detect and mark change points in the Instantaneous Frequency
+    changePoints_if = findchangepts(instantaneousFrequency, 'MaxNumChanges', 5);
+    plot(t_if(changePoints_if), instantaneousFrequency(changePoints_if), 'ro', 'MarkerSize', 6, 'LineWidth', 2);
+    hold off;
+
+    % Add annotations for modulation type and SNR
+    dim = [0.15 0.6 0.3 0.3]; % Position of the annotation box [x y w h]
+    annotation('textbox', dim, 'String', {sprintf('Modulation: %s', classes{modIndex}), sprintf('SNR: %.2f dB', snr)}, ...
+        'FitBoxToText', 'on', 'BackgroundColor', 'w', 'EdgeColor', 'k', 'FontSize', 8);
+
+    fprintf('Instantaneous Frequency plot successfully generated.\n');
+
+catch ME
+    fprintf('Error in Instantaneous Frequency analysis: %s\n', ME.message);
+    fprintf('Error details:\n%s\n', getReport(ME, 'extended'));
+    subplot(4, 4, 4);
+    text(0.5, 0.5, 'Error in IF Analysis', ...
+        'HorizontalAlignment', 'center', 'Color', 'red', 'FontSize', 12);
+    axis off;
+end
+
 
 % Plot 5: Instantaneous Bandwidth
 subplot(4, 4, 5);
