@@ -356,22 +356,44 @@ colormap(jet);
 set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
 set(gca, 'Position', get(gca, 'OuterPosition') - ...
     get(gca, 'TightInset') * [-1 0 1 0; 0 -1 0 1; 0 0 1 0; 0 0 0 1]);
-
-% 14. Energy Detector Plot
+% 14. Energy Detector Plot (Frequency Domain)
 subplot(4, 4, 14);
-energy_threshold = 0.7 * max(abs(complexSignal_gpu).^2); % 70% of max energy as threshold
-signal_energy = abs(complexSignal_gpu).^2;
-detected_signals = signal_energy > energy_threshold;
-t = (0:length(complexSignal_gpu)-1) / 1024; % Assuming 1024 Hz sampling rate
-plot(t, signal_energy);
+
+% First gather all GPU data we need
+if isa(complexSignal_gpu, 'gpuArray')
+    complexSignal = gather(complexSignal_gpu);
+else
+    complexSignal = complexSignal_gpu;
+end
+
+% Perform FFT on the complex signal
+nfft = length(complexSignal);
+freq = (-nfft/2:nfft/2-1)*(1024/nfft); % Frequency axis centered at 0
+signal_fft = fftshift(fft(complexSignal, nfft));
+signal_energy_freq = abs(signal_fft).^2;
+
+% Convert to dB
+signal_energy_freq_db = 10*log10(signal_energy_freq + eps); % eps prevents log(0)
+
+% Calculate energy threshold in dB domain
+energy_threshold_freq_db = 10*log10(0.7 * max(signal_energy_freq) + eps);
+detected_signals_freq = signal_energy_freq_db > energy_threshold_freq_db;
+
+% Plot
+plot(freq, signal_energy_freq_db);
 hold on;
-plot(t, energy_threshold * ones(size(t)), 'r--');
-plot(t(detected_signals), signal_energy(detected_signals), 'ro');
+plot(freq, energy_threshold_freq_db * ones(size(freq)), 'r--');
+plot(freq(detected_signals_freq), signal_energy_freq_db(detected_signals_freq), 'ro');
 hold off;
-title('Energy Detector');
-xlabel('Time (s)');
-ylabel('Signal Energy');
-legend('Signal Energy', 'Threshold', 'Detected Signals');
+
+title('Frequency Domain Energy Detector');
+xlabel('Frequency (Hz)');
+ylabel('Spectral Energy (dB)');
+legend('Signal Energy', 'Threshold', 'Detected Frequencies');
+
+% Adjust axes for better visualization
+xlim([-1024/2, 1024/2]); % Limit to Nyquist frequency range
+grid on;
 
 set(gca, 'XTickMode', 'auto', 'XTickLabelMode', 'auto');
 set(gca, 'Position', get(gca, 'OuterPosition') - ...
@@ -425,4 +447,4 @@ fprintf('Spectral Entropy: %.4f\n', se);
 fprintf('Spectral Flatness: %.4f\n', sf);
 fprintf('Spectral Kurtosis: %.4f\n', sk);
 fprintf('Spectral Skewness: %.4f\n', ss);
-fprintf('Energy Detector: %d signals detected\n', sum(detected_signals));
+fprintf('Energy Detector: %d frequencies detected\n', sum(detected_signals_freq));
